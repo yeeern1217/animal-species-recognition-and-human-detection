@@ -179,7 +179,7 @@ elif page == "Test Your Video":
         st.success("Uploaded video successfully.")
 
         try:
-            trained_model = YOLO('C:/Users/HP/Documents/UM/Sem5/WIH3001 DSP/Animal_Species_Recognition_and_Poaching_Detection/Deployment/yolo_corrected.pt')
+            trained_model = YOLO('yolo_corrected.pt')
             cap = cv2.VideoCapture(input_video_path)
             output_video_path = os.path.join(temp_dir.name, "output_video.mp4")
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
