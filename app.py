@@ -120,194 +120,195 @@ elif page == "Exploratory Data Analysis":
     """
     )
 
-import time
-import streamlit as st
-import cv2
-import os
-import tempfile
-from ultralytics import YOLO
-import pandas as pd
-import plotly.express as px
-import numpy as np
+    elif page == "Test Your Video":
+    import time
+    import streamlit as st
+    import cv2
+    import os
+    import tempfile
+    from ultralytics import YOLO
+    import pandas as pd
+    import plotly.express as px
+    import numpy as np
 
-# Helper Functions
-def preprocess_frame(frame):
-    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    edges = cv2.Canny(gray_frame, 100, 200)
-    adaptive_thresh = cv2.adaptiveThreshold(gray_frame, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-    combined_frame = cv2.merge([gray_frame, edges, adaptive_thresh])
-    return combined_frame
+    # Helper Functions
+    def preprocess_frame(frame):
+        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        edges = cv2.Canny(gray_frame, 100, 200)
+        adaptive_thresh = cv2.adaptiveThreshold(gray_frame, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+        combined_frame = cv2.merge([gray_frame, edges, adaptive_thresh])
+        return combined_frame
 
-def generate_heatmap(bbox_locations, frame_shape, scale_factor=0.8):
-    heatmap = np.zeros((frame_shape[0], frame_shape[1]), dtype=np.float32)
-    for x, y, w, h in bbox_locations:
-        center_x, center_y = int(x + w / 2), int(y + h / 2)
-        heatmap[center_y, center_x] += 1
-    heatmap = cv2.GaussianBlur(heatmap, (21, 21), 0)
-    heatmap = cv2.normalize(heatmap, None, 0, 255, cv2.NORM_MINMAX)
-    heatmap = np.uint8(heatmap)
-    heatmap_colored = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-    heatmap_colored = cv2.cvtColor(heatmap_colored, cv2.COLOR_BGR2RGB)
-    resized_heatmap = cv2.resize(heatmap_colored, (int(frame_shape[1] * scale_factor), int(frame_shape[0] * scale_factor)))
-    return resized_heatmap
+    def generate_heatmap(bbox_locations, frame_shape, scale_factor=0.8):
+        heatmap = np.zeros((frame_shape[0], frame_shape[1]), dtype=np.float32)
+        for x, y, w, h in bbox_locations:
+            center_x, center_y = int(x + w / 2), int(y + h / 2)
+            heatmap[center_y, center_x] += 1
+        heatmap = cv2.GaussianBlur(heatmap, (21, 21), 0)
+        heatmap = cv2.normalize(heatmap, None, 0, 255, cv2.NORM_MINMAX)
+        heatmap = np.uint8(heatmap)
+        heatmap_colored = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+        heatmap_colored = cv2.cvtColor(heatmap_colored, cv2.COLOR_BGR2RGB)
+        resized_heatmap = cv2.resize(heatmap_colored, (int(frame_shape[1] * scale_factor), int(frame_shape[0] * scale_factor)))
+        return resized_heatmap
 
-# Dashboard Layout
-st.title("Test Your Video")
+    # Dashboard Layout
+    st.title("Test Your Video")
 
-# Metrics Section
-st.subheader("Model Metrics", anchor="metrics")
-metrics_col1, metrics_col2, metrics_col3 = st.columns(3)
-with metrics_col1:
-    st.metric("mAP", "0.633", help="Mean Average Precision")
-with metrics_col2:
-    st.metric("FPS", "5.44", help="Frames Per Second")
-with metrics_col3:
-    st.metric("Parameters", "2.59M", help="Model Parameters")
+    # Metrics Section
+    st.subheader("Model Metrics", anchor="metrics")
+    metrics_col1, metrics_col2, metrics_col3 = st.columns(3)
+    with metrics_col1:
+        st.metric("mAP", "0.633", help="Mean Average Precision")
+    with metrics_col2:
+        st.metric("FPS", "5.44", help="Frames Per Second")
+    with metrics_col3:
+        st.metric("Parameters", "2.59M", help="Model Parameters")
 
-uploaded_video = st.file_uploader("Choose a video file", type=["avi", "mp4"], label_visibility="collapsed")
+    uploaded_video = st.file_uploader("Choose a video file", type=["avi", "mp4"], label_visibility="collapsed")
 
-# If a video is uploaded, process it
-if uploaded_video is not None:
-    # Check if we have already processed the video
-    if 'processed_video_path' not in st.session_state:
-        temp_dir = tempfile.TemporaryDirectory()
-        input_video_path = os.path.join(temp_dir.name, uploaded_video.name)
-        with open(input_video_path, "wb") as f:
-            f.write(uploaded_video.read())
+    # If a video is uploaded, process it
+    if uploaded_video is not None:
+        # Check if we have already processed the video
+        if 'processed_video_path' not in st.session_state:
+            temp_dir = tempfile.TemporaryDirectory()
+            input_video_path = os.path.join(temp_dir.name, uploaded_video.name)
+            with open(input_video_path, "wb") as f:
+                f.write(uploaded_video.read())
 
-        st.success("Video uploaded successfully!")
+            st.success("Video uploaded successfully!")
 
-        try:
-            # Load YOLO model
-            trained_model = YOLO('yolo_corrected.pt')
+            try:
+                # Load YOLO model
+                trained_model = YOLO('yolo_corrected.pt')
 
-            # Create a directory to save processed videos
-            output_dir = "processed_videos"
-            os.makedirs(output_dir, exist_ok=True)
+                # Create a directory to save processed videos
+                output_dir = "processed_videos"
+                os.makedirs(output_dir, exist_ok=True)
 
-            # Define the persistent output path
-            output_video_path = os.path.join(output_dir, "output_video.mp4")
+                # Define the persistent output path
+                output_video_path = os.path.join(output_dir, "output_video.mp4")
 
-            # Process video
-            cap = cv2.VideoCapture(input_video_path)
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            out = None
+                # Process video
+                cap = cv2.VideoCapture(input_video_path)
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                out = None
 
-            max_predictions = {}
-            total_confidences = {}
-            bbox_locations = []
-            total_frames = 0
-            total_time = 0
+                max_predictions = {}
+                total_confidences = {}
+                bbox_locations = []
+                total_frames = 0
+                total_time = 0
 
-            data_for_dashboard = []
+                data_for_dashboard = []
 
-            while cap.isOpened():
-                ret, frame = cap.read()
-                if not ret:
-                    break
+                while cap.isOpened():
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
 
-                start_time = time.time()
-                preprocessed_frame = preprocess_frame(frame)
-                results = trained_model(preprocessed_frame, imgsz=640, conf=0.25)
-                frame_with_boxes = results[0].plot()
+                    start_time = time.time()
+                    preprocessed_frame = preprocess_frame(frame)
+                    results = trained_model(preprocessed_frame, imgsz=640, conf=0.25)
+                    frame_with_boxes = results[0].plot()
 
-                frame_time = time.time() - start_time
-                total_time += frame_time
-                total_frames += 1
+                    frame_time = time.time() - start_time
+                    total_time += frame_time
+                    total_frames += 1
 
-                for result in results[0].boxes.data:
-                    class_id = int(result[-1])
-                    confidence = result[-2]
-                    x1, y1, x2, y2 = map(int, result[:4])
-                    bbox_locations.append((x1, y1, x2 - x1, y2 - y1))
+                    for result in results[0].boxes.data:
+                        class_id = int(result[-1])
+                        confidence = result[-2]
+                        x1, y1, x2, y2 = map(int, result[:4])
+                        bbox_locations.append((x1, y1, x2 - x1, y2 - y1))
 
-                    species = class_id  # Replace with your mapping logic
-                    data_for_dashboard.append({
-                        "Frame": total_frames,
-                        "Species": species,
-                        "Confidence": confidence.item()
-                    })
+                        species = class_id  # Replace with your mapping logic
+                        data_for_dashboard.append({
+                            "Frame": total_frames,
+                            "Species": species,
+                            "Confidence": confidence.item()
+                        })
 
-                if out is None:
-                    height, width, _ = frame_with_boxes.shape
-                    out = cv2.VideoWriter(output_video_path, fourcc, cap.get(cv2.CAP_PROP_FPS), (width, height))
+                    if out is None:
+                        height, width, _ = frame_with_boxes.shape
+                        out = cv2.VideoWriter(output_video_path, fourcc, cap.get(cv2.CAP_PROP_FPS), (width, height))
 
-                out.write(frame_with_boxes)
+                    out.write(frame_with_boxes)
 
-            cap.release()
-            if out:
-                out.release()
+                cap.release()
+                if out:
+                    out.release()
 
-            frame_shape = frame_with_boxes.shape
+                frame_shape = frame_with_boxes.shape
+                heatmap = generate_heatmap(bbox_locations, frame_shape)
+
+                # Store the output path in session state
+                st.session_state.processed_video_path = output_video_path
+                st.session_state.data_for_dashboard = data_for_dashboard
+                st.session_state.frame_shape = frame_shape
+                st.session_state.bbox_locations = bbox_locations
+                st.session_state.total_frames = total_frames
+                st.session_state.total_time = total_time
+
+            except Exception as e:
+                st.error(f"An error occurred while processing the video: {e}")
+
+        # Display processed video and analysis
+        if 'processed_video_path' in st.session_state:
+            output_video_path = st.session_state.processed_video_path
+            frame_shape = st.session_state.frame_shape
+            bbox_locations = st.session_state.bbox_locations
+            data_for_dashboard = st.session_state.data_for_dashboard
+            total_frames = st.session_state.total_frames
+            total_time = st.session_state.total_time
+
             heatmap = generate_heatmap(bbox_locations, frame_shape)
 
-            # Store the output path in session state
-            st.session_state.processed_video_path = output_video_path
-            st.session_state.data_for_dashboard = data_for_dashboard
-            st.session_state.frame_shape = frame_shape
-            st.session_state.bbox_locations = bbox_locations
-            st.session_state.total_frames = total_frames
-            st.session_state.total_time = total_time
+            # Dashboard Display
+            st.header("Analysis Results")
 
-        except Exception as e:
-            st.error(f"An error occurred while processing the video: {e}")
+            # Bounding Box and Confidence Levels Section
+            col1, col2 = st.columns(2)
 
-    # Display processed video and analysis
-    if 'processed_video_path' in st.session_state:
-        output_video_path = st.session_state.processed_video_path
-        frame_shape = st.session_state.frame_shape
-        bbox_locations = st.session_state.bbox_locations
-        data_for_dashboard = st.session_state.data_for_dashboard
-        total_frames = st.session_state.total_frames
-        total_time = st.session_state.total_time
+            with col1:
+                st.subheader("Bounding Box Heatmap")
+                st.image(heatmap, caption="Heatmap of Bounding Box Locations", use_column_width=True)
 
-        heatmap = generate_heatmap(bbox_locations, frame_shape)
+            with col2:
+                st.subheader("Confidence Levels Over Frames")
+                df = pd.DataFrame(data_for_dashboard)
+                confidence_fig = px.line(
+                    df,
+                    x="Frame",
+                    y="Confidence",
+                    color="Species",
+                    title="Confidence Levels",
+                    labels={"Confidence": "Confidence Level", "Frame": "Frame Number"}
+                )
+                # Customize layout for better appearance
+                confidence_fig.update_layout(
+                    height=frame_shape[0] * 0.8,
+                    title=dict(x=0.5, xanchor="center"),
+                    plot_bgcolor="#f9f9f9",
+                    paper_bgcolor="#f9f9f9",
+                    font=dict(family="Arial", size=12, color="#333")
+                )
+                st.plotly_chart(confidence_fig, use_container_width=True)
 
-        # Dashboard Display
-        st.header("Analysis Results")
+            # Processing Metrics Section
+            st.subheader("Processing Metrics", anchor="metrics")
+            metrics_col1, metrics_col2 = st.columns(2)
+            with metrics_col1:
+                st.metric("Total Frames", total_frames)
+            with metrics_col2:
+                st.metric("Total Time (s)", round(total_time, 2))
 
-        # Bounding Box and Confidence Levels Section
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.subheader("Bounding Box Heatmap")
-            st.image(heatmap, caption="Heatmap of Bounding Box Locations", use_column_width=True)
-
-        with col2:
-            st.subheader("Confidence Levels Over Frames")
-            df = pd.DataFrame(data_for_dashboard)
-            confidence_fig = px.line(
-                df,
-                x="Frame",
-                y="Confidence",
-                color="Species",
-                title="Confidence Levels",
-                labels={"Confidence": "Confidence Level", "Frame": "Frame Number"}
+            # Add download button for the processed video
+            with open(output_video_path, "rb") as f:
+                video_bytes = f.read()
+            st.download_button(
+                label="Download Processed Video",
+                data=video_bytes,
+                file_name="output_video.mp4",
+                mime="video/mp4"
             )
-            # Customize layout for better appearance
-            confidence_fig.update_layout(
-                height=frame_shape[0] * 0.8,
-                title=dict(x=0.5, xanchor="center"),
-                plot_bgcolor="#f9f9f9",
-                paper_bgcolor="#f9f9f9",
-                font=dict(family="Arial", size=12, color="#333")
-            )
-            st.plotly_chart(confidence_fig, use_container_width=True)
-
-        # Processing Metrics Section
-        st.subheader("Processing Metrics", anchor="metrics")
-        metrics_col1, metrics_col2 = st.columns(2)
-        with metrics_col1:
-            st.metric("Total Frames", total_frames)
-        with metrics_col2:
-            st.metric("Total Time (s)", round(total_time, 2))
-
-        # Add download button for the processed video
-        with open(output_video_path, "rb") as f:
-            video_bytes = f.read()
-        st.download_button(
-            label="Download Processed Video",
-            data=video_bytes,
-            file_name="output_video.mp4",
-            mime="video/mp4"
-        )
