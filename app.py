@@ -156,7 +156,7 @@ elif page == "Test Your Video":
     st.title("Test Your Video")
 
     # Metrics Section
-    st.subheader("Model Metrics", anchor="metrics")
+    st.subheader("Model Used: YOLO11", anchor="metrics")
     metrics_col1, metrics_col2, metrics_col3 = st.columns(3)
     with metrics_col1:
         st.metric("mAP", "0.633", help="Mean Average Precision")
@@ -167,10 +167,15 @@ elif page == "Test Your Video":
 
     uploaded_video = st.file_uploader("Choose a video file", type=["avi", "mp4"], label_visibility="collapsed")
 
+    # Initialize session state variables
+    if 'species_count_per_frame' not in st.session_state:
+        st.session_state.species_count_per_frame = {}
+
     # If a video is uploaded, process it
     if uploaded_video is not None:
         # Check if we have already processed the video
         if 'processed_video_path' not in st.session_state:
+            
             temp_dir = tempfile.TemporaryDirectory()
             input_video_path = os.path.join(temp_dir.name, uploaded_video.name)
             with open(input_video_path, "wb") as f:
@@ -199,8 +204,13 @@ elif page == "Test Your Video":
                 bbox_locations = []
                 total_frames = 0
                 total_time = 0
+                poacher_detected = False
 
                 data_for_dashboard = []
+                species_count_per_frame = {}  # Dictionary to store species counts per frame
+
+                # Inside the video processing loop
+                human_alert_shown = False  # Flag to track if the human alert has been shown
 
                 while cap.isOpened():
                     ret, frame = cap.read()
@@ -216,18 +226,51 @@ elif page == "Test Your Video":
                     total_time += frame_time
                     total_frames += 1
 
+                    human_detected = False  # Flag to track if a human is detected in the current frame
+                    frame_species_count = {}  # Dictionary to store species count for the current frame
+
+                    class_id_to_species = {
+                        0: "Human",
+                        1: "Elephant",
+                        2: "Lion",
+                        3: "Giraffe",
+                        # Add all class IDs with their corresponding species names
+                    }
                     for result in results[0].boxes.data:
                         class_id = int(result[-1])
                         confidence = result[-2]
                         x1, y1, x2, y2 = map(int, result[:4])
                         bbox_locations.append((x1, y1, x2 - x1, y2 - y1))
 
-                        species = class_id  # Replace with your mapping logic
+                        species = class_id_to_species.get(class_id, f"Unknown ({class_id})")
                         data_for_dashboard.append({
                             "Frame": total_frames,
                             "Species": species,
                             "Confidence": confidence.item()
                         })
+
+                        # Count species occurrences in this frame
+                        if species not in frame_species_count:
+                            frame_species_count[species] = 1
+                        else:
+                            frame_species_count[species] += 1
+
+                        # Check if human class (typically ID 0) is detected
+                        if class_id == 0:  # Assuming '0' is the human class in YOLO
+                            human_detected = True
+
+                    # Update the species count across all frames
+                    for species, count in frame_species_count.items():
+                        if species not in st.session_state.species_count_per_frame:
+                            st.session_state.species_count_per_frame[species] = {"min": count, "max": count}
+                        else:
+                            st.session_state.species_count_per_frame[species]["min"] = min(st.session_state.species_count_per_frame[species]["min"], count)
+                            st.session_state.species_count_per_frame[species]["max"] = max(st.session_state.species_count_per_frame[species]["max"], count)
+
+                    if human_detected and not human_alert_shown:
+                        # Display an alert for human detection, but only once
+                        st.warning(f"Human detected!")
+                        human_alert_shown = True  # Set the flag to prevent further alerts
 
                     if out is None:
                         height, width, _ = frame_with_boxes.shape
@@ -253,7 +296,7 @@ elif page == "Test Your Video":
             except Exception as e:
                 st.error(f"An error occurred while processing the video: {e}")
 
-        # Display processed video and analysis
+        # Display processed video and analysis only if classes are detected
         if 'processed_video_path' in st.session_state:
             output_video_path = st.session_state.processed_video_path
             frame_shape = st.session_state.frame_shape
@@ -262,53 +305,79 @@ elif page == "Test Your Video":
             total_frames = st.session_state.total_frames
             total_time = st.session_state.total_time
 
-            heatmap = generate_heatmap(bbox_locations, frame_shape)
+            # Check if there were any predictions
+            if len(data_for_dashboard) == 0:
+                st.warning("No predictions were made. Please upload a valid video with detectable objects.")
+            else:
+                heatmap = generate_heatmap(bbox_locations, frame_shape)
 
-            # Dashboard Display
-            st.header("Analysis Results")
+                # Dashboard Display
+                st.header("Analysis Results")
 
-            # Bounding Box and Confidence Levels Section
-            col1, col2 = st.columns(2)
+                # Bounding Box and Confidence Levels Section
+                col1, col2 = st.columns(2)
 
-            with col1:
-                st.subheader("Bounding Box Heatmap")
-                st.image(heatmap, caption="Heatmap of Bounding Box Locations", use_column_width=True)
+                with col1:
+                    st.subheader("Bounding Box Heatmap")
+                    st.image(heatmap, caption="Heatmap of Bounding Box Locations", use_column_width=True)
 
-            with col2:
-                st.subheader("Confidence Levels Over Frames")
-                df = pd.DataFrame(data_for_dashboard)
-                confidence_fig = px.line(
-                    df,
-                    x="Frame",
-                    y="Confidence",
-                    color="Species",
-                    title="Confidence Levels",
-                    labels={"Confidence": "Confidence Level", "Frame": "Frame Number"}
+                with col2:
+                    st.subheader("Confidence Levels Over Frames")
+                    df = pd.DataFrame(data_for_dashboard)
+                    confidence_fig = px.line(
+                        df,
+                        x="Frame",
+                        y="Confidence",
+                        color="Species",
+                        title="Confidence Levels",
+                        labels={"Confidence": "Confidence Level", "Frame": "Frame Number"}
+                    )
+                    # Customize layout for better appearance
+                    confidence_fig.update_layout(
+                        height=frame_shape[0] * 0.8,
+                        title=dict(x=0.5, xanchor="center"),
+                    )
+                    st.plotly_chart(confidence_fig, use_container_width=True)
+
+                # Processing Metrics Section
+                st.subheader("Processing Metrics", anchor="metrics")
+                metrics_col1, metrics_col2 = st.columns(2)
+                with metrics_col1:
+                    st.metric("Total Frames", total_frames)
+                with metrics_col2:
+                    st.metric("Total Time (s)", round(total_time, 2))
+
+                # Define a mapping of class IDs to species names (example mapping)
+                class_id_to_species = {
+                    0: "Human",
+                    1: "Elephant",
+                    2: "Lion",
+                    3: "Giraffe",
+                    # Add all class IDs with their corresponding species names
+                }
+
+                # Inside the species detection summary section:
+                species_summary = []
+                for species, counts in st.session_state.species_count_per_frame.items():
+                    # Map class ID to species name
+                    species_name = class_id_to_species.get(species, f"{species}")
+                    species_summary.append({
+                        "Species": species_name,  # Use the species name here
+                        "Min Count": counts["min"],
+                        "Max Count": counts["max"]
+                    })
+
+                species_df = pd.DataFrame(species_summary)
+                st.subheader("Species Count Summary (Min/Max per Frame)")
+                st.dataframe(species_df)
+
+                # Add download button for the processed video
+                with open(output_video_path, "rb") as f:
+                    video_bytes = f.read()
+                st.download_button(
+                    label="Download Processed Video",
+                    data=video_bytes,
+                    file_name="output_video.mp4",
+                    mime="video/mp4"
                 )
-                # Customize layout for better appearance
-                confidence_fig.update_layout(
-                    height=frame_shape[0] * 0.8,
-                    title=dict(x=0.5, xanchor="center"),
-                    plot_bgcolor="#f9f9f9",
-                    paper_bgcolor="#f9f9f9",
-                    font=dict(family="Arial", size=12, color="#333")
-                )
-                st.plotly_chart(confidence_fig, use_container_width=True)
 
-            # Processing Metrics Section
-            st.subheader("Processing Metrics", anchor="metrics")
-            metrics_col1, metrics_col2 = st.columns(2)
-            with metrics_col1:
-                st.metric("Total Frames", total_frames)
-            with metrics_col2:
-                st.metric("Total Time (s)", round(total_time, 2))
-
-            # Add download button for the processed video
-            with open(output_video_path, "rb") as f:
-                video_bytes = f.read()
-            st.download_button(
-                label="Download Processed Video",
-                data=video_bytes,
-                file_name="output_video.mp4",
-                mime="video/mp4"
-            )
