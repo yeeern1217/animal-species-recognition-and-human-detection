@@ -120,7 +120,7 @@ elif page == "Exploratory Data Analysis":
     """
     )
 
-    elif page == "Test Your Video":
+elif page == "Test Your Video":
     import time
     import streamlit as st
     import cv2
