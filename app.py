@@ -6,7 +6,7 @@ import os
 import shutil
 
 # Set page configuration
-st.set_page_config(page_title="Data Driven Animal Species Recognition and Human Detection", layout="wide")
+st.set_page_config(page_title="Data Driven Wildlife Species Recognition and Human Detection", layout="wide")
 
 # Check if the 'selected_page' exists in session_state; if not, initialize it
 if 'selected_page' not in st.session_state:
@@ -19,7 +19,7 @@ import streamlit as st
 
 if page == "Home Page":
     # Dataset Description Page Code
-    st.title("Data-Driven Animal Species Recognition and Poacher Detection", anchor="home")
+    st.title("Data-Driven Wildlife Species Recognition and Poacher Detection", anchor="home")
     
     # Add an image with a caption
     st.image("cover.png", use_column_width=True, caption="Monitoring Wildlife with AI")
